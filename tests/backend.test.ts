@@ -1,45 +1,44 @@
-import { createServer } from "http";
-import { io as Client } from "socket.io-client";
-import { Server } from "socket.io";
-import { assert } from "chai";
-import { Socket } from "dgram";
+import user from '../src/user';
+import message from '../src/message';
+const assert = require("chai").assert;
+const expect = require("chai").expect;
 
-describe('test socket.io', function() {
-  let io, serverSocket, clientSocket;
+describe('test backend', function() {
+    it("test set/get username function", () => {
+        let arr: string[]=[];
+        const users = new user();
 
-  before((done) => {
-    const httpServer = createServer();
-    io = new Server(httpServer);
-    httpServer.listen(() => {
-      const port = httpServer.address().port;
-      clientSocket = new Client(`http://localhost:${port}`);
-      io.on("connection", (socket: Socket) => {
-        serverSocket = socket;
-      });
-      clientSocket.on("connect", done);
+        let exist = users.isUser('user1', arr);
+        assert.isFalse(exist);
+
+        let ret = users.setUser('user1', arr);
+        exist = users.isUser('user1', arr);
+        assert.isTrue(ret);
+        assert.isTrue(exist);
+
+        ret = users.setUser('user1', arr);
+        assert.isFalse(ret);
+
+        users.setUser('user2', arr);
+        expect(arr).to.deep.equal(['user1','user2']);
+    });
+
+    it("test set/reply message function", () => {
+        const messages: Array<string[]> = [];
+        const msg = new message();
+        
+        let ret = msg.checkMessage(['Alice','hello?']);
+        assert.isTrue(ret);
+
+        ret = msg.checkMessage(['Alice']);
+        assert.isFalse(ret);
+
+        msg.setMessage(['Alice','hello?'], messages);
+        expect(messages).to.deep.equal([['Alice','hello?']]);
+        msg.setMessage(['Bob','hi'], messages);
+        expect(messages).to.deep.equal([['Alice','hello?'],['Bob','hi']]);
+
+        const reply = msg.broadcastMessage(['Bob','hi']);
+        assert.equal(reply, 'Bob say: hi');
     });
   });
-
-  after(() => {
-    io.close();
-    clientSocket.close();
-  });
-
-  it("should work", (done) => {
-    clientSocket.on("hello", (arg: string) => {
-      assert.equal(arg, "world");
-      done();
-    });
-    serverSocket.emit("hello", "world");
-  });
-
-  it("should work (with ack)", (done) => {
-    serverSocket.on("hi", (cb: string) => {
-      cb("hola");
-    });
-    clientSocket.emit("hi", (arg: string) => {
-      assert.equal(arg, "hola");
-      done();
-    });
-  });
-});
