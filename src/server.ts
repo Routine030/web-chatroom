@@ -6,10 +6,6 @@ const express = require('express');
 const http = require('http');
 const socketio = require('socket.io');
 
-declare global {
-    var names: Array<string>;
-}
-
 const app: Application = express();
 
 const server = http.createServer(app);
@@ -46,5 +42,10 @@ io.on('connection', (socket: Socket) => {
             const reply = messages.broadcastMessage(msg);
             io.emit('forAll',reply)
         }
+    })
+
+    socket.on("sayHi", (msg: string) => {
+        console.log(msg)
+        io.emit('toUser','hello')
     })
 });
