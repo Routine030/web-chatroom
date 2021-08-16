@@ -1,8 +1,9 @@
+import { Socket } from "dgram";
 const { createServer } = require("http");
 const { Server } = require("socket.io");
 const Client = require("socket.io-client");
 const assert = require("chai").assert;
-import { Socket } from "dgram";
+
 
 describe('test socket.io', function() {
   let io: Socket, serverSocket: Socket, clientSocket: Socket;

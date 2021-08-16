@@ -1,11 +1,10 @@
-import { Socket } from "dgram";
-import {Application, Request, Response} from "express";
+import {Application} from "express";
 import user from './user';
-import message from './message';
+import message,{MsgInfo} from './message';
+import { Socket } from "socket.io";
 const express = require('express');
 const http = require('http');
 const socketio = require('socket.io');
-
 const app: Application = express();
 
 const server = http.createServer(app);
@@ -18,34 +17,55 @@ const io = socketio(server,{
     }
 });
 
-console.log("server socket 3000");
 const userPool: string[] = [];
-const messagePool: Array<string[]> = [];
+const messagePool: Array<MsgInfo[]> = [];
+const userSockets: {[key: string]:Socket} = {};
 
 io.on('connection', (socket: Socket) => {
-//     console.log("user connected")
     socket.on("setUsername", (name: string) => {
         const users = new user();
         const ret = users.setUser(name,userPool);
-        if(ret) {
-            socket.emit('setSuccess', name);
+
+        if (ret) {
+            userSockets[name] = socket;
+            socket.emit('setSuccess', true);
+            // when login, load user list
+            socket.emit('getUserList', userPool);
+            // notify new user for existed user
+            socket.broadcast.emit('updateUser', name);
         } else {
-            socket.emit('setFail', name);
+            socket.emit('setFail', false);
         }
     })
 
-    socket.on("postMessage", (msg: string[]) => {
+    socket.on("postMessage", (msg: MsgInfo[]) => {
         const messages = new message();
+        // 1. check msg exist
         const check = messages.checkMessage(msg);
-        if(check) {
+        if (check) {
+            //2. set to DB
             messages.setMessage(msg,messagePool);
-            const reply = messages.broadcastMessage(msg);
-            io.emit('forAll',reply)
+            //3. parse for reply
+            if (msg[0].to == 'other' && (msg[0].action)) {
+                if (msg[0].action in userSockets){
+                    userSockets[msg[0].action].emit('privateTo', msg);
+                    userSockets[msg[0].user].emit('privateTo', msg);
+                }
+            } else {
+                io.emit('all',msg);
+            }
         }
     })
 
-    socket.on("sayHi", (msg: string) => {
-        console.log(msg)
-        io.emit('toUser','hello')
+    socket.on('disconnect',() => {
+        const exitUser = Object.keys(userSockets).find(key => userSockets[key] === socket);
+        if (exitUser){
+            // delete user info in userPool, userSockets
+            userPool.splice(userPool.indexOf(exitUser),1);
+            delete userSockets[exitUser];
+            // notify client
+            io.emit('someoneLeave',exitUser);
+            io.emit('all',[{user: exitUser,msg: '我已經離線'}]);
+        }
     })
 });

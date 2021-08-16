@@ -1,15 +1,24 @@
+/*
+MsgInfo [{user,msg,to,action}]
+forAll: user,msg,all,X
+other: user,msg,other,username
+*/
+export interface MsgInfo {
+    user: string;
+    msg: string;
+    to: string;
+    action?: string;
+}
+
 export default class message{
-    setMessage(msg: string[], msgs:Array<string[]>) {
+    setMessage(msg: MsgInfo[], msgs:Array<MsgInfo[]>) {
         msgs.push(msg);
+        //return msgs.length;
     }
 
-    broadcastMessage(msg: string[]) {
-        const reply = msg[0]+' say: '+msg[1];
-        return reply;
-    }
-
-    checkMessage(msg: string[]){
-        if(msg.length!==2) return false;
+    checkMessage(msg: MsgInfo[]){
+        if(Object.keys(msg[0]).length > 4) return false;
+        if (msg[0].to!=='all'&& msg[0].to !== 'other') return false;
         return true;
     }
 }

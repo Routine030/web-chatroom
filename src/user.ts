@@ -7,6 +7,7 @@ export default class user{
         }
         return false;
     }
+
     isUser(name: string, names:Array<string>){
         if(names.includes(name)){
             return true;
