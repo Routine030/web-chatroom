@@ -1,8 +1,8 @@
-import { Repository } from "./app";
-import { MsgInfo, UserInfo, UserID, MsgID } from "./chat_repository";
-import { v4 as uuid } from "uuid";
-import { Response } from "./event";
-import { Socket, Server } from "socket.io";
+import { Repository } from './app';
+import { MsgInfo, UserInfo, UserID, MsgID } from './chat_repository';
+import { v4 as uuid } from 'uuid';
+import { Response } from './event';
+import { Socket, Server } from 'socket.io';
 
 export default function (repository: Repository, socket: Socket, io: Server){
     const { chatRepository } = repository;
@@ -14,16 +14,16 @@ export default function (repository: Repository, socket: Socket, io: Server){
         ) {
             const existUser = await chatRepository.existUser(payload.user);
             if (existUser) {
-                socket.emit("setFail", false);
+                socket.emit('setFail', false);
                 callback({
                     data: 'user already exist',
                 });
             } else {
                 await chatRepository.saveUser(payload);
                 await chatRepository.saveSocket({id: payload.user,socket: socket}); //save u_socket
-                socket.emit("setSuccess", true);
+                socket.emit('setSuccess', true);
                 // notify new user for existed user
-                socket.broadcast.emit("updateUser", payload.user);
+                socket.broadcast.emit('updateUser', payload.user);
                 callback({
                     data: payload.user,
                 });
@@ -34,12 +34,12 @@ export default function (repository: Repository, socket: Socket, io: Server){
             const ret = await chatRepository.findAllUser();
             if(ret) {
                 callback({data: ret});
-                socket.emit("getUserList", ret);
+                socket.emit('getUserList', ret);
             }
         },
 
         postMsg: async function(
-            payload: Omit<MsgInfo, "id">,
+            payload: Omit<MsgInfo, 'id'>,
             callback: (res: Response<MsgID>) => void
         ) {
             const validate = true; //todo
@@ -66,17 +66,16 @@ export default function (repository: Repository, socket: Socket, io: Server){
         },
 
         deleteUserSocket: async function(
-            id: UserID,
         ) {
-            const existUser = await chatRepository.existUser(id);
+            const socketID = await chatRepository.findSocketID(socket);
 
-            if (existUser) {
+            if (socketID) {
                 // delete user info in userPool, userSockets
-                await chatRepository.deleteUser(id);
-                await chatRepository.deleteSocket(id);
+                await chatRepository.deleteUser(socketID);
+                await chatRepository.deleteSocket(socketID);
                 // notify client
-                io.emit('someoneLeave',id);
-                io.emit('all',[{user: id,msg: '我已經離線'}]);
+                io.emit('someoneLeave',socketID);
+                io.emit('all',{user: socketID, msg: '我已經離線'});
             }
         },
     };

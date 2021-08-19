@@ -1,162 +1,163 @@
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
-import io, { Socket } from "socket.io-client";
-import InputName from "./components/InputName";
-import { MsgInfo } from './message';
-import "bootstrap/dist/css/bootstrap.css";
-import { UsernameContext } from './UsernameContext';
+import io, { Socket } from 'socket.io-client';
+import 'bootstrap/dist/css/bootstrap.css';
+import { MsgInfo, UserInfo } from './chat_repository';
 
 function App() {
-  const [ws, setWs] = useState<Socket|null>(null);
+    const [ws, setWs] = useState<Socket|null>(null);
+    const [sysmsg, setSysmsg] = useState('Please enter your name');
+    const [username, setUsername] = useState('');
+    const [passLogin, setPassLogin] = useState(false);
+    const [toserver, setToserver] = useState(false);
+    const [allUsers, setAllUsers] = useState<string[]>([]);
+    const [message, setMessage] = useState('');
+    const [privateTo, setPrivateTo] = useState('');
+    const [allMessages, setAllMessages] = useState<Pick<MsgInfo, 'user'|'msg'|'action'>[]>([]);
 
-  const [sysmsg, setSysmsg] = useState("Please enter your name");
-  const [username, setUsername] = useState("");
-  const [passLogin, setPassLogin] = useState(false);
-  const [toserver, setToserver] = useState(false);
+    useEffect(() => {
+        if (toserver) {
+          setWs(io('http://localhost:3000'));
+        }
+    }, [toserver])
 
-  const [allUsers, setAllUsers] = useState<string[]>([]);
-  const [message, setMessage] = useState("");
-  const [privateTo, setPrivateTo] = useState("");
-  const [allMessages, setAllMessages] = useState<MsgInfo[]>([]);
+    useEffect(() => {
+        if (ws) {
+            ws.emit('setUsername', {user: username}, () => {});
 
-  useEffect(() => {
-    if (toserver) {
-      setWs(io('http://localhost:3000'));
-    }
-  }, [toserver])
+            ws.on('setSuccess', (ret) => {
+                setPassLogin(ret);
+                setSysmsg('hello, '+ username);
+                ws.emit('getAllUser',() => {});
+            })
 
-  useEffect(() => {      
-    if (ws) {
-      ws.emit('setUsername', username);
+            ws.on('setFail', (ret) => {
+                setUsername('');
+                setPassLogin(ret);
+                setToserver(ret);
+                setSysmsg('exist name, pls retry other name');
+            })
 
-      ws.on('setSuccess', (ret: boolean) => {
-        setPassLogin(ret);
-        setSysmsg('hello, '+username);
-      })
+            ws.on('getUserList', (userlist: UserInfo[]) => {
+                const newList = userlist.map(item => item.user); 
+                setAllUsers(allUsers=>[...allUsers,...newList]);
+            })
+        }
 
-      ws.on('setFail', (ret: boolean) => {
-        setUsername("");
-        setPassLogin(ret);
-        setToserver(false);
-        setSysmsg('exist name, pls retry other name');
-      })
+        getPublicMessages();
+        getPrivateMessage();
+        updateUsers();
+        userLeave();
+    },[ws])
 
-      ws.on('getUserList', (userlist: string) => {
-        setAllUsers(allUsers=>[...allUsers,...userlist]);
-      })
-    }
-
-    getAllMessages();
-    getPrivateMessage();
-    updateUsers();
-    userLeave();
-  },[ws])
-
-  const getAllMessages = () => {
-    if (ws) {
-      ws.on('all', (message: MsgInfo) => {
-        setAllMessages(allMessages => [...allMessages, message]);
-      })
-    }
-  }
-
-  const getPrivateMessage = () => {
-    if (ws) {
-      ws.on('privateTo', (message: MsgInfo) => {
-        setAllMessages(allMessages => [...allMessages, message]);
-      })
-    }
-  }
-
-  const updateUsers = () => {
-    if (ws) {
-      ws.on('updateUser', (name: string) => {
-        setAllUsers(allUsers=>[...allUsers,name]);
-      })
-    }
-  }
-
-  const userLeave = () => {
-    if (ws) {
-      ws.on('someoneLeave', (name: string) => {
-        setAllUsers(prevActions => (
-          prevActions.filter((value, i) => i !== prevActions.indexOf(name))
-        ));
-      })
-    }
-  }
-
-  const postMessage = (privateTo:string|null) => {
-    let msg = [{user:username,msg:message,to:'all',action:''}];
-    if (privateTo) {
-      //msg = [{user:username,msg:message,to:'other',action:privateTo}];
-      msg[0].to = 'other';
-      msg[0].action = privateTo;
+    const getPublicMessages = () => {
+        if (ws) {
+            ws.on('all', (message: Pick<MsgInfo, 'user'|'msg'>) => {
+                const newMessage = {...message, action: ''};
+                setAllMessages(allMessages => [...allMessages, newMessage]);
+            })
+        }
     }
 
-    if (ws) {
-      ws.emit('postMessage', msg);
-      setMessage("");
+    const getPrivateMessage = () => {
+        if (ws) {
+            ws.on('privateTo', (message: MsgInfo) => {
+                setAllMessages(allMessages => [...allMessages, message]);
+            })
+        }
     }
-  }
 
-  const selectUser = (user: string) =>{
-    if (user == username) { return; }
-    setPrivateTo(user);
-  }
+    const updateUsers = () => {
+        if (ws) {
+            ws.on('updateUser', (name: string) => {
+                setAllUsers(allUsers=>[...allUsers,name]);
+            })
+        }
+    }
 
-  const cancelPrivate = () =>{
-    setPrivateTo("");
-  }
+    const userLeave = () => {
+        if (ws) {
+            ws.on('someoneLeave', (name: string) => {
+                setAllUsers(prevActions => (
+                    prevActions.filter((value, i) => i !== prevActions.indexOf(name))
+                ));
+            })
+        }
+    }
+
+    const postMessage = (privateTo:string|null) => {
+        let msg :Omit<MsgInfo,'id'> = {user:username, msg:message, to:'all', action:''};
+
+        if (privateTo) {
+            msg.to = 'other';
+            msg.action = privateTo;
+        }
+
+        if (ws) {
+            ws.emit('postMessage', msg, () => {});
+            setMessage('');
+        }
+    }
+
+    const selectUser = (user: string) =>{
+        if (user == username) { return; }
+        setPrivateTo(user);
+    }
+
+    const cancelPrivate = () =>{
+        setPrivateTo('');
+    }
 
   return (
     <div>
-        <div className="container-fluid">
-          <div className="row">
-            <div className="col-sm-4">
-              {sysmsg}
-              {passLogin && (
+      <div className='container-fluid'>
+        <div className='row'>
+          <div className='col-sm-4'>
+            {sysmsg}
+            {passLogin && (
               <div>
                 <div>Online Users:</div>
                 <div>
                   {
-                    allUsers.map((user,index) => <div key={index} onMouseDown={e=>selectUser(user)}>{user}</div>
+                    allUsers.map(
+                      (user,index) => <div key={index} onMouseDown={e => selectUser(user)}>{user}</div>
+                    )
+                  }
+                </div>
+              </div>
+            )}
+          </div>
+          <div className='col-sm-8'>
+            {passLogin && (
+              <div>                   
+                <div>
+                  {
+                    allMessages.map((msg, index) => 
+                      <div key={index}>{msg.user}{msg.action != '' && '偷偷對' + msg.action}說 : {msg.msg}
+                      </div>
+                    )
+                  }
+                </div>
+                <div>
+                  <input type='text' value={message} id='text' onChange={e => setMessage(e.currentTarget.value)}/>
+                  <input type='button' value='送出' onClick={() => postMessage(privateTo)} />
+                  {privateTo && (
+                    <div>只給{privateTo}<input type='button' value='取消指定' onClick={() => cancelPrivate()} /></div>
                   )}
                 </div>
               </div>
-              )
-              }
-            </div>
-            <div className="col-sm-8">
-              {passLogin && (
-                <div>                   
-                  <div>
-                    {
-                      allMessages.map((msg, index) => 
-                        <div key={index}>{msg[0].user}{msg[0].to == 'other' && '偷偷對' + msg[0].action}說 : {msg[0].msg}
-                        </div>
-                      )
-                    }
-                  </div>
-                  <div>
-                    <input type='text' value={message} id='text' onChange={e => setMessage(e.currentTarget.value)}/>
-                    <input type='button' value='送出' onClick={() => postMessage(privateTo)} />
-                    {privateTo && (
-                      <div>只給{privateTo}<input type='button' value='取消指定' onClick={() => cancelPrivate()} /></div>
-                    )}
-                  </div>
-                </div>
-              )}
-              {!passLogin && (
-                <UsernameContext.Provider value={{username,setUsername,toserver,setToserver}}>
-                <InputName />
-                </UsernameContext.Provider>
-              )}
-            </div>
+            )}
+            {!passLogin && (
+              <div>
+              <input type='text' value={username} id='inputNmae' onChange={e => setUsername(e.currentTarget.value)}/>
+              <input type='button' value='進入聊天室' onClick={() => setToserver(true)}/>
+              </div>
+            )}
           </div>
         </div>
+      </div>
     </div>
   );
 }
 
-ReactDOM.render(<App />, document.getElementById("root"));
+ReactDOM.render(<App />, document.getElementById('root'));

@@ -1,4 +1,4 @@
-import { Socket } from "socket.io";
+import { Socket } from 'socket.io';
 
 abstract class ARepository<T, U, V> {
     abstract saveMessage(entity: T): Promise<void>;
@@ -10,6 +10,7 @@ abstract class ARepository<T, U, V> {
     abstract deleteUser(id: UserID): Promise<void>;
     abstract saveSocket(entity: V): Promise<void>;
     abstract findSocket(id: SocketID): Promise<V>;
+    abstract findSocketID(socket: Socket): Promise<string>;
     abstract deleteSocket(id: SocketID): Promise<void>;
   }
 
@@ -103,6 +104,16 @@ export class InMemoryChatRepository extends ChatRepository {
             return Promise.resolve(this.sockets.get(key)!);
         } else {
             return Promise.reject();
+        }
+    }
+
+    findSocketID(socket: Socket): Promise<string> {
+        const existSocket = [...this.sockets.values()].filter(value => value.socket == socket);
+
+        if(existSocket.length){
+            return Promise.resolve(existSocket[0].id);
+        } else {
+            return Promise.reject();            
         }
     }
 
